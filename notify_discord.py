@@ -17,6 +17,7 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 
 from __future__ import annotations
+import asyncio
 import datetime
 import functools
 import json
@@ -45,6 +46,8 @@ DISCORD_RE = re.compile(
 # The embed shows all of it, so it's left out of the card.
 PROGRESS_RE = re.compile(
     r"^.* \(\d+%\) \| -?[\d.]+/[\d.]+°C \| -?[\d.]+/[\d.]+°C$")
+# Seconds to wait before each attempt to reach Discord.
+RETRY_DELAYS = (0., 10., 20., 30.)
 # FlashForgeUI-Electron's status labels and embed colors.
 STATUS_LABELS = {
     "Ready": "✅ Ready",
@@ -125,21 +128,21 @@ class NotifyDiscord:
         message: str = "",
     ) -> None:
         try:
-            await self._post_discord(inst, webhook, event_name, event_args,
-                                     message)
+            embed, photo = await self._build_embed(
+                inst, event_name, event_args, message)
+            await self._post_discord(webhook, embed, photo)
         except Exception:
             logging.exception(
                 "notify_discord: Discord embed failed, sending plain text")
             await fallback(event_name, event_args, message)
 
-    async def _post_discord(
+    async def _build_embed(
         self,
         inst: NotifierInstance,
-        webhook: str,
         event_name: str,
         event_args: List,
         message: str,
-    ) -> None:
+    ):
         kapis: KlippyAPI = self.server.lookup_component("klippy_apis")
         status = await kapis.query_objects({
             "print_stats": None,
@@ -162,21 +165,42 @@ class NotifyDiscord:
             if event_name == "error" and not message:
                 message = stats.get("message", "")
             embed = self._status_embed(event_name, stats, status, message)
-        embed["timestamp"] = datetime.datetime.now(
-            datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         photo = await self._snapshot(inst, event_name, event_args, message)
-        if photo is None:
-            body: Any = json.dumps({"embeds": [embed]})
-            headers = {"Content-Type": "application/json"}
-        else:
+        if photo is not None:
             embed["image"] = {"url": "attachment://snapshot.jpg"}
-            body, headers = _multipart({"embeds": [embed]}, photo)
+        return embed, photo
+
+    # Right after boot the printer's clock is wrong until it syncs, so HTTPS
+    # fails ("certificate is not yet valid"); Discord can also have a bad
+    # moment. Both are retried for about a minute. Discord refusing the
+    # card (4xx) isn't.
+    async def _post_discord(
+        self, webhook: str, embed: Dict[str, Any], photo: Optional[bytes]
+    ) -> None:
         client: HttpClient = self.server.lookup_component("http_client")
-        resp = await client.request(
-            "POST", webhook, body, headers, request_timeout=15.)
-        if resp.status_code not in (200, 204):
-            raise RuntimeError(
-                f"Discord returned {resp.status_code}: {resp.text[:200]}")
+        for delay in RETRY_DELAYS:
+            if delay:
+                await asyncio.sleep(delay)
+            # Set per attempt, so a retry after the clock syncs gets the
+            # right time.
+            embed["timestamp"] = datetime.datetime.now(
+                datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+            if photo is None:
+                body: Any = json.dumps({"embeds": [embed]})
+                headers = {"Content-Type": "application/json"}
+            else:
+                body, headers = _multipart({"embeds": [embed]}, photo)
+            resp = await client.request(
+                "POST", webhook, body, headers, request_timeout=15.)
+            if resp.status_code in (200, 204):
+                return
+            if resp.status_code < 500:
+                break
+            logging.info(
+                f"notify_discord: Discord unreachable ({resp.status_code}), "
+                "retrying")
+        raise RuntimeError(
+            f"Discord returned {resp.status_code}: {resp.text[:200]}")
 
     def _printer_name(self) -> str:
         if self.name_override:
