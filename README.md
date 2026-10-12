@@ -10,6 +10,8 @@ notify sends its messages through Moonraker and Apprise. On Discord, that shows 
 - a "✅ Print Complete!" card with the total time when a print finishes
 - Zmod's own messages (printer on, filament runout, `_NOTIFY` text from your G-code) at the top of the card
 
+<img src="docs/discord-card.png" alt="notify_discord card from an AD5X while printing: status, nozzle and bed temperatures, progress bar at 36%, print time, ETA, layer 31 of 175, file name and camera photo" width="460">
+
 The plugin only changes how messages look. Which messages are sent, and when, is still set by notify. If notify's `url` isn't a Discord webhook, nothing changes. If Discord rejects a card, the message is sent as plain text as before.
 
 ## Requirements
