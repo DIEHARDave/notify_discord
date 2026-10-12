@@ -1,6 +1,6 @@
 # notify_discord
 
-Discord cards for the [Zmod notify plugin](https://github.com/ghzserg/notify) on Flashforge AD5X, AD5M and AD5M Pro printers.
+Discord cards for the [Zmod notify plugin](https://github.com/ghzserg/notify) on Flashforge Creator 5 Pro, Creator 5, AD5X, AD5M and AD5M Pro printers.
 
 notify sends its messages through Moonraker and Apprise. On Discord, that shows up as a line of plain text with the camera photo attached as a file. With this plugin installed, the same messages arrive as Discord embeds laid out like [FlashForgeUI](https://github.com/Parallel-7/FlashForgeUI-Electron)'s:
 
