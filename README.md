@@ -88,7 +88,7 @@ The photo, the progress interval and the on/off switches for each message are no
 - The ETA uses the slicer's time estimate and shows in each reader's own time zone.
 - The layer comes from the slicer's `SET_PRINT_STATS_INFO`. Without it, the layer is worked out from the nozzle height and the file's layer height.
 - The `body:` text of notify's notifiers isn't used for cards, so changes to it only show up on other services.
-- The plugin links `notify_discord.py` into Zmod's Moonraker (`base/moonraker/components`). If Moonraker is ever reinstalled from scratch, run `ENABLE_PLUGIN name=notify_discord` again.
+- The plugin links `notify_discord.py` into the `components` folder of Zmod's Moonraker (inside Zmod's chroot). If Moonraker is ever reinstalled from scratch, run `ENABLE_PLUGIN name=notify_discord` again.
 
 ## How it works
 

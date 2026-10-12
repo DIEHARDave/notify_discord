@@ -2,11 +2,11 @@
 # notify_discord - run by Zmod's ENABLE_PLUGIN name=notify_discord
 #
 # Links the Moonraker component into Zmod's Moonraker and includes the
-# plugin's Moonraker settings. Zmod runs this on the host, but Moonraker's
-# checkout (/root/printer_data/config/base/moonraker) may only exist inside
-# Zmod's chroot, so the script reruns itself there when needed.
+# plugin's Moonraker settings. Zmod runs this on the host; Moonraker and
+# its checkout live in Zmod's chroot, so the script reruns itself there.
 
 [ -f /opt/config/mod/.shell/0.sh ] && . /opt/config/mod/.shell/0.sh
+[ -f /usr/data/zmod/zmod/.shell/0.sh ] && . /usr/data/zmod/zmod/.shell/0.sh
 
 set -eu
 
@@ -16,8 +16,21 @@ CHROOT_PLUGIN_DIR="/opt/config/mod_data/plugins/$NAME"
 PLUGIN_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd -P)
 CONFIG_DIR=$(CDPATH= cd -- "$PLUGIN_DIR/../../.." && pwd -P)
 
+# Moonraker runs in Zmod's chroot (unless /ZMOD says there is none), so
+# the work is done there.
+if [ ! -f /ZMOD ] && [ -z "${NOTIFY_DISCORD_CHROOT:-}" ] &&
+    [ -n "${MOD:-}" ] && [ -d "$MOD" ]; then
+    unset LD_LIBRARY_PATH LD_PRELOAD
+    exec chroot "$MOD" /bin/sh -c \
+        "NOTIFY_DISCORD_CHROOT=1 $CHROOT_PLUGIN_DIR/install.sh"
+fi
+
+# Zmod 1.7+ keeps Moonraker in $DATA/zmod/moonraker, older ones in
+# config/base/moonraker.
 MOON_DIR=
-for dir in /root/printer_data/config/base/moonraker "$CONFIG_DIR/base/moonraker"; do
+for dir in ${DATA:+"$DATA/zmod/moonraker"} /usr/data/zmod/moonraker \
+    /data/zmod/moonraker /root/printer_data/config/base/moonraker \
+    "$CONFIG_DIR/base/moonraker"; do
     if [ -d "$dir/components" ]; then
         MOON_DIR=$dir
         break
@@ -25,11 +38,6 @@ for dir in /root/printer_data/config/base/moonraker "$CONFIG_DIR/base/moonraker"
 done
 
 if [ -z "$MOON_DIR" ]; then
-    if [ -z "${NOTIFY_DISCORD_CHROOT:-}" ] && [ -n "${MOD:-}" ] && [ -d "$MOD" ]; then
-        unset LD_LIBRARY_PATH LD_PRELOAD
-        exec chroot "$MOD" /bin/sh -c \
-            "NOTIFY_DISCORD_CHROOT=1 $CHROOT_PLUGIN_DIR/install.sh"
-    fi
     echo "notify_discord: Zmod's Moonraker not found" >&2
     exit 1
 fi
